@@ -1,10 +1,11 @@
 // Service Worker - 衣橱整理助手
-const CACHE_NAME = 'wardrobe-v1';
+const CACHE_NAME = 'wardrobe-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/lib/supabase.min.js',
   '/manifest.json',
 ];
 
@@ -37,6 +38,7 @@ self.addEventListener('fetch', (event) => {
   if (
     url.hostname.includes('supabase') ||
     url.hostname.includes('cdn.jsdelivr.net') ||
+    url.hostname.includes('unpkg.com') ||
     url.hostname.includes('tensorflow')
   ) {
     event.respondWith(

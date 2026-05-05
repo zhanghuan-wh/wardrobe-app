@@ -437,9 +437,9 @@ USING (bucket_id = 'wardrobe-photos');</pre>
   <!-- 全局错误显示 -->
   <div id="global-error" style="display:none;position:fixed;top:0;left:0;right:0;background:#FEE2E2;color:#991B1B;padding:16px;z-index:999;font-size:14px;text-align:center;"></div>
 
-  <!-- Supabase JS SDK（必需）- 使用 unpkg CDN -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <!-- TensorFlow.js 和 MobileNet（可选） -->
+  <!-- Supabase JS SDK（本地文件，无需 CDN） -->
+  <script src="lib/supabase.min.js"></script>
+  <!-- TensorFlow.js 和 MobileNet（可选，CDN 加载） -->
   <script src="https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js" async></script>
   <script src="https://unpkg.com/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js" async></script>
   <!-- 应用代码 -->

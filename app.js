@@ -157,19 +157,22 @@ async function startApp() {
   if (!url || !key) {
     errBox.textContent = '请填写 Project URL 和 Anon Key';
     errBox.style.display = 'block';
+    errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
   if (!url.includes('supabase.co')) {
     errBox.textContent = 'URL 格式不正确，应包含 supabase.co';
     errBox.style.display = 'block';
+    errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
   // 检查 Supabase SDK 是否加载
   if (typeof window.supabase === 'undefined') {
-    errBox.textContent = '网络加载失败，请检查网络连接后刷新页面重试';
+    errBox.textContent = 'Supabase SDK 加载失败，请刷新页面重试';
     errBox.style.display = 'block';
+    errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -196,6 +199,8 @@ async function startApp() {
     errBox.innerHTML = '连接失败：' + msg +
       '<br><br>请检查：<br>1. 是否已在 SQL Editor 中运行了 setup.sql<br>2. URL 和 Key 是否正确';
     errBox.style.display = 'block';
+    errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast('连接失败，请检查配置');
   } finally {
     btn.textContent = '开始使用';
     btn.disabled = false;
