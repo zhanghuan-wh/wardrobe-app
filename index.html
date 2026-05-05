@@ -121,7 +121,7 @@ USING (bucket_id = 'wardrobe-photos');</pre>
         </div>
       </div>
 
-      <button class="btn-primary btn-start" onclick="startApp()">开始使用</button>
+      <button class="btn-primary btn-start" onclick="try{startApp()}catch(e){alert('错误：'+e.message);console.error(e)}">开始使用</button>
     </div>
   </div>
 
@@ -438,19 +438,26 @@ USING (bucket_id = 'wardrobe-photos');</pre>
   <div id="global-error" style="display:none;position:fixed;top:0;left:0;right:0;background:#FEE2E2;color:#991B1B;padding:16px;z-index:999;font-size:14px;text-align:center;"></div>
 
   <!-- Supabase JS SDK（本地文件，无需 CDN） -->
-  <script src="lib/supabase.min.js"></script>
+  <script src="lib/supabase.min.js" onerror="document.getElementById('global-error').innerHTML='Supabase SDK 加载失败，请刷新页面';document.getElementById('global-error').style.display='block';"></script>
   <!-- TensorFlow.js 和 MobileNet（可选，CDN 加载） -->
   <script src="https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js" async></script>
   <script src="https://unpkg.com/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js" async></script>
   <!-- 应用代码 -->
-  <script src="app.js"></script>
+  <script src="app.js" onerror="document.getElementById('global-error').innerHTML='应用代码加载失败，请刷新页面重试';document.getElementById('global-error').style.display='block';"></script>
 
   <!-- 加载检测 -->
   <script>
     window.addEventListener('load', function() {
       var errDiv = document.getElementById('global-error');
+      var errors = [];
       if (typeof window.supabase === 'undefined') {
-        errDiv.innerHTML = '网络加载失败：Supabase SDK 无法加载。<br>请检查网络连接，或尝试使用 VPN/切换网络后刷新页面。';
+        errors.push('Supabase SDK 未加载');
+      }
+      if (typeof startApp !== 'function') {
+        errors.push('应用代码未加载（startApp 不存在）');
+      }
+      if (errors.length > 0) {
+        errDiv.innerHTML = '加载错误：<br>' + errors.join('<br>') + '<br><br>请检查网络连接后刷新页面';
         errDiv.style.display = 'block';
       }
     });
