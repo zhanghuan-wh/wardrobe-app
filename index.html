@@ -796,7 +796,8 @@ function selectSeason(btn) {
 async function saveBox() {
   const name = document.getElementById('box-name').value.trim();
   if (!name) { showToast('请输入箱子名称'); return; }
-  const season = document.querySelector('.season-btn.active')?.dataset.season || '四季';
+  const activeBtn = document.querySelector('.season-btn.active');
+  const season = (activeBtn && activeBtn.dataset.season) || '四季';
   const location = document.getElementById('box-location').value.trim();
   const notes = document.getElementById('box-notes').value.trim();
   try {
@@ -935,7 +936,7 @@ function detectDominantColor(imgElement) {
     let r = 0, g = 0, b = 0, count = 0;
     for (let i = 0; i < imageData.length; i += 16) { r += imageData[i]; g += imageData[i+1]; b += imageData[i+2]; count++; }
     return rgbToColorName(Math.round(r/count), Math.round(g/count), Math.round(b/count));
-  } catch { return ''; }
+  } catch(e) { return ''; }
 }
 
 function rgbToColorName(r, g, b) {
