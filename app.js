@@ -64,53 +64,57 @@ const COLOR_KEYWORDS = {
 
 // ---------- 初始化 ----------
 document.addEventListener('DOMContentLoaded', () => {
-  // 检查是否已有 Supabase 配置
-  const url = localStorage.getItem('supabase_url');
-  const key = localStorage.getItem('supabase_key');
+  try {
+    // 检查是否已有 Supabase 配置
+    const url = localStorage.getItem('supabase_url');
+    const key = localStorage.getItem('supabase_key');
 
-  if (url && key) {
-    initSupabase(url, key);
-    document.getElementById('page-setup').classList.remove('active');
-    document.getElementById('app').style.display = 'flex';
-    loadAllData();
-  }
+    if (url && key && typeof window.supabase !== 'undefined') {
+      initSupabase(url, key);
+      document.getElementById('page-setup').classList.remove('active');
+      document.getElementById('app').style.display = 'flex';
+      loadAllData();
+    }
 
-  // 标签输入事件
-  const tagsInput = document.getElementById('add-tags-input');
-  if (tagsInput) {
-    tagsInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ',') {
-        e.preventDefault();
-        const tag = tagsInput.value.trim();
-        if (tag && !currentTags.includes(tag)) {
-          currentTags.push(tag);
-          renderTags();
+    // 标签输入事件
+    const tagsInput = document.getElementById('add-tags-input');
+    if (tagsInput) {
+      tagsInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          const tag = tagsInput.value.trim();
+          if (tag && !currentTags.includes(tag)) {
+            currentTags.push(tag);
+            renderTags();
+          }
+          tagsInput.value = '';
         }
-        tagsInput.value = '';
-      }
+      });
+    }
+
+    // 颜色选择器事件
+    document.querySelectorAll('.color-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('add-color').value = btn.dataset.color;
+      });
     });
+
+    // 搜索输入回车
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doSearch();
+      });
+      searchInput.addEventListener('input', debounce(doSearch, 300));
+    }
+
+    // 预加载 AI 模型（不阻塞主流程）
+    setTimeout(() => loadAIModel(), 3000);
+  } catch (err) {
+    console.error('Init error:', err);
   }
-
-  // 颜色选择器事件
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('add-color').value = btn.dataset.color;
-    });
-  });
-
-  // 搜索输入回车
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') doSearch();
-    });
-    searchInput.addEventListener('input', debounce(doSearch, 300));
-  }
-
-  // 预加载 AI 模型
-  loadAIModel();
 });
 
 // ---------- Supabase 初始化 ----------
@@ -136,7 +140,7 @@ function copySQL() {
 }
 
 async function startApp() {
- const url = document.getElementById('setup-url').value.trim();
+  const url = document.getElementById('setup-url').value.trim();
   const key = document.getElementById('setup-key').value.trim();
   const btn = document.querySelector('.btn-start');
 
@@ -151,14 +155,12 @@ async function startApp() {
   errBox.style.display = 'none';
 
   if (!url || !key) {
-    showToast('请填写 Project URL 和 Anon Key');
     errBox.textContent = '请填写 Project URL 和 Anon Key';
     errBox.style.display = 'block';
     return;
   }
 
   if (!url.includes('supabase.co')) {
-    showToast('URL 格式不正确，应包含 supabase.co');
     errBox.textContent = 'URL 格式不正确，应包含 supabase.co';
     errBox.style.display = 'block';
     return;
@@ -178,9 +180,6 @@ async function startApp() {
   localStorage.setItem('supabase_url', url);
   localStorage.setItem('supabase_key', key);
 
-  initSupabase(url, key);
-
-  // 测试连接
   try {
     initSupabase(url, key);
 
@@ -193,7 +192,6 @@ async function startApp() {
     showToast('连接成功！');
     loadAllData();
   } catch (err) {
-    showToast('连接失败：' + (err.message || '请检查配置'));
     const msg = err.message || '请检查配置';
     errBox.innerHTML = '连接失败：' + msg +
       '<br><br>请检查：<br>1. 是否已在 SQL Editor 中运行了 setup.sql<br>2. URL 和 Key 是否正确';
@@ -203,7 +201,6 @@ async function startApp() {
     btn.disabled = false;
   }
 }
-
 
 // ---------- 页面导航 ----------
 function navigateTo(page) {
@@ -675,9 +672,17 @@ function compressImage(file, maxSize, quality) {
 // ---------- AI 图像识别 ----------
 async function loadAIModel() {
   try {
+    // 等待 TF.js 加载完成（最多等 10 秒）
+    let waitCount = 0;
+    while (!window.tf && waitCount < 20) {
+      await new Promise(r => setTimeout(r, 500));
+      waitCount++;
+    }
     if (window.mobilenet) {
       mobileNetModel = await window.mobilenet.load();
       console.log('MobileNet loaded');
+    } else {
+      console.warn('MobileNet not available, AI classification disabled');
     }
   } catch (err) {
     console.warn('AI model load failed:', err);
@@ -686,9 +691,23 @@ async function loadAIModel() {
 
 async function runAIClassification(imgElement) {
   if (!mobileNetModel) {
-    await loadAIModel();
+    try { await loadAIModel(); } catch(e) {}
   }
-  if (!mobileNetModel) return;
+  if (!mobileNetModel) {
+    // AI 不可用，只做颜色检测
+    const resultDiv = document.getElementById('ai-result');
+    const tagsDiv = document.getElementById('ai-tags');
+    const detectedColor = detectDominantColor(imgElement);
+    if (detectedColor) {
+      resultDiv.style.display = 'block';
+      tagsDiv.innerHTML = `<span class="ai-tag selected" onclick="applyAITag(this, '${detectedColor}')">${detectedColor}</span>
+        <span style="color:#999;font-size:12px;margin-left:8px">（AI模型未加载，仅检测颜色）</span>`;
+      if (!document.getElementById('add-color').value) {
+        document.getElementById('add-color').value = detectedColor;
+      }
+    }
+    return;
+  }
 
   const resultDiv = document.getElementById('ai-result');
   const tagsDiv = document.getElementById('ai-tags');

@@ -434,11 +434,11 @@ USING (bucket_id = 'wardrobe-photos');</pre>
   <!-- ========== Toast 提示 ========== -->
   <div id="toast" class="toast"></div>
 
-  <!-- 加载 TensorFlow.js 和 MobileNet -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
-  <!-- Supabase JS SDK -->
+  <!-- Supabase JS SDK（必需） -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- TensorFlow.js 和 MobileNet（可选，加载失败不影响主功能） -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js" async onerror="console.warn('TF.js load failed')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js" async onerror="console.warn('MobileNet load failed')"></script>
   <!-- 应用代码 -->
   <script src="app.js"></script>
 </body>
