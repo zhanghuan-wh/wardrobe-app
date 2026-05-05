@@ -136,18 +136,43 @@ function copySQL() {
 }
 
 async function startApp() {
-  const url = document.getElementById('setup-url').value.trim();
+ const url = document.getElementById('setup-url').value.trim();
   const key = document.getElementById('setup-key').value.trim();
+  const btn = document.querySelector('.btn-start');
+
+  // 显示错误信息的容器
+  let errBox = document.getElementById('setup-error');
+  if (!errBox) {
+    errBox = document.createElement('div');
+    errBox.id = 'setup-error';
+    errBox.style.cssText = 'background:#FEE2E2;color:#991B1B;padding:12px;border-radius:8px;margin-bottom:12px;font-size:14px;display:none;';
+    btn.parentNode.insertBefore(errBox, btn);
+  }
+  errBox.style.display = 'none';
 
   if (!url || !key) {
     showToast('请填写 Project URL 和 Anon Key');
+    errBox.textContent = '请填写 Project URL 和 Anon Key';
+    errBox.style.display = 'block';
     return;
   }
 
   if (!url.includes('supabase.co')) {
     showToast('URL 格式不正确，应包含 supabase.co');
+    errBox.textContent = 'URL 格式不正确，应包含 supabase.co';
+    errBox.style.display = 'block';
     return;
   }
+
+  // 检查 Supabase SDK 是否加载
+  if (typeof window.supabase === 'undefined') {
+    errBox.textContent = '网络加载失败，请检查网络连接后刷新页面重试';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  btn.textContent = '连接中...';
+  btn.disabled = true;
 
   // 保存配置
   localStorage.setItem('supabase_url', url);
@@ -157,6 +182,9 @@ async function startApp() {
 
   // 测试连接
   try {
+    initSupabase(url, key);
+
+    // 测试连接
     const { error } = await supabase.from('boxes').select('id').limit(1);
     if (error) throw error;
 
@@ -166,8 +194,16 @@ async function startApp() {
     loadAllData();
   } catch (err) {
     showToast('连接失败：' + (err.message || '请检查配置'));
+    const msg = err.message || '请检查配置';
+    errBox.innerHTML = '连接失败：' + msg +
+      '<br><br>请检查：<br>1. 是否已在 SQL Editor 中运行了 setup.sql<br>2. URL 和 Key 是否正确';
+    errBox.style.display = 'block';
+  } finally {
+    btn.textContent = '开始使用';
+    btn.disabled = false;
   }
 }
+
 
 // ---------- 页面导航 ----------
 function navigateTo(page) {
