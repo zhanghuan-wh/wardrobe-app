@@ -121,7 +121,7 @@ USING (bucket_id = 'wardrobe-photos');</pre>
         </div>
       </div>
 
-      <button class="btn-primary btn-start" onclick="startApp()">开始使用</button>
+      <button class="btn-primary btn-start" id="btn-start" onclick="startApp()">开始使用</button>
     </div>
   </div>
 
@@ -442,13 +442,34 @@ USING (bucket_id = 'wardrobe-photos');</pre>
   <!-- 应用代码 -->
   <script src="app.js"></script>
 
-  <!-- 加载检测 -->
+  <!-- 加载检测 + 调试 -->
   <script>
     window.addEventListener('load', function() {
       var errDiv = document.getElementById('global-error');
+      var errors = [];
+
+      // 检查 Supabase SDK
       if (typeof window.supabase === 'undefined') {
-        errDiv.innerHTML = '网络加载失败：Supabase SDK 无法加载。<br>请检查网络连接，或尝试使用 VPN/切换网络后刷新页面。';
+        errors.push('Supabase SDK 未加载');
+      }
+
+      // 检查 app.js 中的 startApp 函数
+      if (typeof startApp !== 'function') {
+        errors.push('app.js 未正确加载（startApp 函数不存在）');
+      }
+
+      if (errors.length > 0) {
+        errDiv.innerHTML = '加载错误：<br>' + errors.join('<br>');
         errDiv.style.display = 'block';
+      } else {
+        // app.js 正常加载，给按钮绑定事件作为备份
+        var btn = document.getElementById('btn-start');
+        if (btn) {
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            startApp();
+          });
+        }
       }
     });
   </script>
