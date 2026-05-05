@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#8B6F47">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>衣橱整理助手</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ========== 引导配置页 ========== -->
+  <div id="page-setup" class="page active">
+    <div class="setup-container">
+      <div class="setup-header">
+        <div class="setup-icon">📦</div>
+        <h1>衣橱整理助手</h1>
+        <p class="setup-subtitle">拍照存衣，轻松找衣</p>
+      </div>
+
+      <div class="setup-steps">
+        <div class="setup-step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>注册 Supabase</h3>
+            <p>访问 <a href="https://supabase.com" target="_blank">supabase.com</a> 免费注册</p>
+            <p>创建一个新项目，记住你设置的数据库密码</p>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>初始化数据库</h3>
+            <p>在 Supabase 控制台左侧点击 <strong>SQL Editor</strong></p>
+            <p>点击 <strong>New query</strong>，粘贴以下 SQL 并运行：</p>
+            <div class="sql-block">
+              <button class="copy-btn" onclick="copySQL()">复制 SQL</button>
+              <pre id="sql-content">-- 衣橱整理助手 - 数据库初始化
+-- 在 Supabase SQL Editor 中运行此脚本
+
+-- 箱子表
+CREATE TABLE IF NOT EXISTS boxes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  season TEXT NOT NULL DEFAULT '四季',
+  location TEXT,
+  photo_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 衣服表
+CREATE TABLE IF NOT EXISTS clothes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  box_id UUID REFERENCES boxes(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  category TEXT,
+  color TEXT,
+  tags TEXT[] DEFAULT '{}',
+  photo_url TEXT,
+  ai_labels TEXT[] DEFAULT '{}',
+  status TEXT DEFAULT 'stored' CHECK (status IN ('stored', 'taken_out')),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 启用 RLS（行级安全）
+ALTER TABLE boxes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clothes ENABLE ROW LEVEL SECURITY;
+
+-- 允许匿名访问（个人使用）
+CREATE POLICY "allow_all_boxes" ON boxes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_clothes" ON clothes FOR ALL USING (true) WITH CHECK (true);
+
+-- 创建存储桶
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('wardrobe-photos', 'wardrobe-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 存储策略
+CREATE POLICY "allow_upload_photos"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'wardrobe-photos');
+
+CREATE POLICY "allow_read_photos"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'wardrobe-photos');
+
+CREATE POLICY "allow_delete_photos"
+ON storage.objects FOR DELETE
+USING (bucket_id = 'wardrobe-photos');</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>获取连接信息</h3>
+            <p>在 Supabase 控制台点击 <strong>Settings</strong> → <strong>API</strong></p>
+            <p>找到 <strong>Project URL</strong> 和 <strong>anon public key</strong></p>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h3>填入配置</h3>
+            <div class="input-group">
+              <label>Project URL</label>
+              <input type="url" id="setup-url" placeholder="https://xxxxx.supabase.co">
+            </div>
+            <div class="input-group">
+              <label>Anon Key</label>
+              <input type="text" id="setup-key" placeholder="eyJhbGciOi...">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary btn-start" onclick="startApp()">开始使用</button>
+    </div>
+  </div>
+
+  <!-- ========== 主应用 ========== -->
+  <div id="app" class="app-container" style="display:none">
+
+    <!-- 顶部标题栏 -->
+    <header class="app-header">
+      <h1 id="header-title">我的衣橱</h1>
+      <button id="btn-header-action" class="btn-icon" style="display:none">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- ===== 首页 ===== -->
+    <main id="page-home" class="page-content active">
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-num" id="stat-boxes">0</span>
+          <span class="stat-label">箱子</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-num" id="stat-clothes">0</span>
+          <span class="stat-label">衣物</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-num" id="stat-stored">0</span>
+          <span class="stat-label">已收纳</span>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <h2>最近添加</h2>
+        <a href="#" class="link-more" onclick="navigateTo('search');return false;">查看全部</a>
+      </div>
+      <div id="recent-clothes" class="clothes-grid"></div>
+
+      <div class="section-header">
+        <h2>我的箱子</h2>
+        <button class="btn-text" onclick="navigateTo('boxes')">管理</button>
+      </div>
+      <div id="home-boxes" class="boxes-list"></div>
+
+      <div id="empty-home" class="empty-state" style="display:none">
+        <div class="empty-icon">👗</div>
+        <p>还没有收纳任何衣物</p>
+        <button class="btn-primary" onclick="navigateTo('add')">开始收纳</button>
+      </div>
+    </main>
+
+    <!-- ===== 箱子列表页 ===== -->
+    <main id="page-boxes" class="page-content">
+      <div id="boxes-list" class="boxes-list"></div>
+      <div id="empty-boxes" class="empty-state" style="display:none">
+        <div class="empty-icon">📦</div>
+        <p>还没有创建箱子</p>
+        <button class="btn-primary" onclick="showAddBoxModal()">创建第一个箱子</button>
+      </div>
+    </main>
+
+    <!-- ===== 箱子详情页 ===== -->
+    <main id="page-box-detail" class="page-content">
+      <div id="box-detail-header" class="box-detail-header"></div>
+      <div id="box-clothes" class="clothes-grid"></div>
+      <div id="empty-box-clothes" class="empty-state" style="display:none">
+        <div class="empty-icon">🧹</div>
+        <p>这个箱子是空的</p>
+        <button class="btn-primary" onclick="navigateTo('add')">添加衣物</button>
+      </div>
+    </main>
+
+    <!-- ===== 添加衣物页 ===== -->
+    <main id="page-add" class="page-content">
+      <div class="add-form">
+        <!-- 拍照区域 -->
+        <div class="photo-section">
+          <div id="photo-preview" class="photo-preview" onclick="takePhoto()">
+            <div class="photo-placeholder">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="M21 15l-5-5L5 21"/>
+              </svg>
+              <span>点击拍照或选择图片</span>
+            </div>
+            <img id="photo-img" style="display:none">
+          </div>
+          <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+
+          <!-- AI 识别结果 -->
+          <div id="ai-result" class="ai-result" style="display:none">
+            <div class="ai-badge">🤖 AI 识别</div>
+            <div id="ai-tags" class="ai-tags"></div>
+          </div>
+        </div>
+
+        <!-- 表单 -->
+        <div class="form-group">
+          <label>衣物名称 <span class="required">*</span></label>
+          <input type="text" id="add-name" placeholder="如：黑色羽绒服">
+        </div>
+
+        <div class="form-group">
+          <label>分类</label>
+          <select id="add-category">
+            <option value="">请选择分类</option>
+            <option value="上衣">上衣</option>
+            <option value="裤子">裤子</option>
+            <option value="裙子">裙子</option>
+            <option value="外套">外套</option>
+            <option value="内衣">内衣</option>
+            <option value="鞋子">鞋子</option>
+            <option value="配饰">配饰</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>颜色</label>
+          <div class="color-picker">
+            <button class="color-btn" data-color="黑色" style="background:#333"></button>
+            <button class="color-btn" data-color="白色" style="background:#fff;border:1px solid #ddd"></button>
+            <button class="color-btn" data-color="红色" style="background:#e74c3c"></button>
+            <button class="color-btn" data-color="蓝色" style="background:#3498db"></button>
+            <button class="color-btn" data-color="绿色" style="background:#2ecc71"></button>
+            <button class="color-btn" data-color="黄色" style="background:#f1c40f"></button>
+            <button class="color-btn" data-color="灰色" style="background:#95a5a6"></button>
+            <button class="color-btn" data-color="棕色" style="background:#8B6F47"></button>
+            <button class="color-btn" data-color="粉色" style="background:#fd79a8"></button>
+            <button class="color-btn" data-color="紫色" style="background:#9b59b6"></button>
+          </div>
+          <input type="text" id="add-color" placeholder="或输入颜色" style="margin-top:8px">
+        </div>
+
+        <div class="form-group">
+          <label>标签</label>
+          <div class="tags-input-wrapper">
+            <div id="add-tags-container" class="tags-container"></div>
+            <input type="text" id="add-tags-input" placeholder="输入标签后回车">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>放入箱子 <span class="required">*</span></label>
+          <select id="add-box">
+            <option value="">请选择箱子</option>
+          </select>
+          <button class="btn-text btn-add-box-inline" onclick="showAddBoxModal()">+ 新建箱子</button>
+        </div>
+
+        <button class="btn-primary btn-save" onclick="saveClothes()" id="btn-save-clothes">
+          <span class="btn-text-content">保存衣物</span>
+          <span class="btn-loading" style="display:none">保存中...</span>
+        </button>
+      </div>
+    </main>
+
+    <!-- ===== 搜索页 ===== -->
+    <main id="page-search" class="page-content">
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="搜索衣物名称、标签、颜色...">
+        <button class="btn-icon" onclick="doSearch()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="filter-bar">
+        <button class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">全部</button>
+        <button class="filter-chip" data-filter="上衣" onclick="setFilter('上衣',this)">上衣</button>
+        <button class="filter-chip" data-filter="裤子" onclick="setFilter('裤子',this)">裤子</button>
+        <button class="filter-chip" data-filter="外套" onclick="setFilter('外套',this)">外套</button>
+        <button class="filter-chip" data-filter="裙子" onclick="setFilter('裙子',this)">裙子</button>
+        <button class="filter-chip" data-filter="鞋子" onclick="setFilter('鞋子',this)">鞋子</button>
+      </div>
+
+      <div class="filter-bar">
+        <button class="filter-chip active" data-season="all" onclick="setSeasonFilter('all',this)">所有季节</button>
+        <button class="filter-chip" data-season="春季" onclick="setSeasonFilter('春季',this)">春季</button>
+        <button class="filter-chip" data-season="夏季" onclick="setSeasonFilter('夏季',this)">夏季</button>
+        <button class="filter-chip" data-season="秋季" onclick="setSeasonFilter('秋季',this)">秋季</button>
+        <button class="filter-chip" data-season="冬季" onclick="setSeasonFilter('冬季',this)">冬季</button>
+      </div>
+
+      <div id="search-results" class="clothes-grid"></div>
+      <div id="empty-search" class="empty-state" style="display:none">
+        <div class="empty-icon">🔍</div>
+        <p>没有找到匹配的衣物</p>
+      </div>
+    </main>
+
+    <!-- ===== 底部导航 ===== -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-page="home" onclick="navigateTo('home')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+        </svg>
+        <span>首页</span>
+      </button>
+      <button class="nav-item" data-page="boxes" onclick="navigateTo('boxes')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+        </svg>
+        <span>箱子</span>
+      </button>
+      <button class="nav-item nav-add" data-page="add" onclick="navigateTo('add')">
+        <div class="nav-add-btn">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </div>
+        <span>收纳</span>
+      </button>
+      <button class="nav-item" data-page="search" onclick="navigateTo('search')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <span>搜索</span>
+      </button>
+      <button class="nav-item" data-page="settings" onclick="navigateTo('settings')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        <span>设置</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ========== 弹窗：添加箱子 ========== -->
+  <div id="modal-add-box" class="modal-overlay" onclick="closeModal('modal-add-box')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 id="modal-box-title">新建箱子</h2>
+        <button class="btn-close" onclick="closeModal('modal-add-box')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>箱子名称 <span class="required">*</span></label>
+          <input type="text" id="box-name" placeholder="如：冬季大箱子">
+        </div>
+        <div class="form-group">
+          <label>季节</label>
+          <div class="season-picker">
+            <button class="season-btn active" data-season="春季" onclick="selectSeason(this)">🌸 春季</button>
+            <button class="season-btn" data-season="夏季" onclick="selectSeason(this)">☀️ 夏季</button>
+            <button class="season-btn" data-season="秋季" onclick="selectSeason(this)">🍂 秋季</button>
+            <button class="season-btn" data-season="冬季" onclick="selectSeason(this)">❄️ 冬季</button>
+            <button class="season-btn" data-season="四季" onclick="selectSeason(this)">📅 四季</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>存放位置</label>
+          <input type="text" id="box-location" placeholder="如：卧室床底、储物间">
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <textarea id="box-notes" placeholder="可选备注信息" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-add-box')">取消</button>
+        <button class="btn-primary" onclick="saveBox()" id="btn-save-box">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 弹窗：衣物详情 ========== -->
+  <div id="modal-clothes-detail" class="modal-overlay" onclick="closeModal('modal-clothes-detail')">
+    <div class="modal-content modal-detail" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 id="detail-title">衣物详情</h2>
+        <button class="btn-close" onclick="closeModal('modal-clothes-detail')">&times;</button>
+      </div>
+      <div class="modal-body" id="detail-body"></div>
+      <div class="modal-footer">
+        <button class="btn-danger" onclick="deleteClothes()">删除</button>
+        <button class="btn-secondary" onclick="toggleClothesStatus()" id="btn-toggle-status">标记取出</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 设置页 ========== -->
+  <main id="page-settings" class="page-content">
+    <div class="settings-list">
+      <div class="settings-item">
+        <div class="settings-label">Supabase URL</div>
+        <div class="settings-value" id="settings-url"></div>
+      </div>
+      <div class="settings-item">
+        <div class="settings-label">Anon Key</div>
+        <div class="settings-value" id="settings-key"></div>
+      </div>
+      <div class="settings-item clickable" onclick="exportData()">
+        <div class="settings-label">导出数据</div>
+        <div class="settings-arrow">›</div>
+      </div>
+      <div class="settings-item clickable" onclick="clearAllData()">
+        <div class="settings-label" style="color:#e74c3c">清除所有数据</div>
+        <div class="settings-arrow">›</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========== Toast 提示 ========== -->
+  <div id="toast" class="toast"></div>
+
+  <!-- 加载 TensorFlow.js 和 MobileNet -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- 应用代码 -->
+  <script src="app.js"></script>
+</body>
+</html>
