@@ -139,66 +139,79 @@ function copySQL() {
   });
 }
 
-async function startApp() {
-  const url = document.getElementById('setup-url').value.trim();
-  const key = document.getElementById('setup-key').value.trim();
-  const btn = document.querySelector('.btn-start');
-
-  // 显示错误信息的容器
-  let errBox = document.getElementById('setup-error');
+function showSetupError(msg) {
+  var errBox = document.getElementById('setup-error');
   if (!errBox) {
     errBox = document.createElement('div');
     errBox.id = 'setup-error';
-    errBox.style.cssText = 'background:#FEE2E2;color:#991B1B;padding:12px;border-radius:8px;margin-bottom:12px;font-size:14px;display:none;';
-    btn.parentNode.insertBefore(errBox, btn);
+    var btn = document.querySelector('.btn-start');
+    if (btn && btn.parentNode) {
+      btn.parentNode.insertBefore(errBox, btn);
+    }
   }
-  errBox.style.display = 'none';
+  errBox.style.cssText = 'background:#FEE2E2;color:#991B1B;padding:12px;border-radius:8px;margin-bottom:12px;font-size:14px;';
+  errBox.innerHTML = msg;
+}
 
-  if (!url || !key) {
-    errBox.textContent = '请填写 Project URL 和 Anon Key';
-    errBox.style.display = 'block';
-    return;
-  }
-
-  if (!url.includes('supabase.co')) {
-    errBox.textContent = 'URL 格式不正确，应包含 supabase.co';
-    errBox.style.display = 'block';
-    return;
-  }
-
-  // 检查 Supabase SDK 是否加载
-  if (typeof window.supabase === 'undefined') {
-    errBox.textContent = '网络加载失败，请检查网络连接后刷新页面重试';
-    errBox.style.display = 'block';
-    return;
-  }
-
-  btn.textContent = '连接中...';
-  btn.disabled = true;
-
-  // 保存配置
-  localStorage.setItem('supabase_url', url);
-  localStorage.setItem('supabase_key', key);
-
+function startApp() {
   try {
+    var urlEl = document.getElementById('setup-url');
+    var keyEl = document.getElementById('setup-key');
+    var btn = document.querySelector('.btn-start');
+
+    if (!urlEl || !keyEl) {
+      showSetupError('页面元素缺失，请刷新页面');
+      return;
+    }
+
+    var url = urlEl.value.trim();
+    var key = keyEl.value.trim();
+
+    // 清除旧错误
+    var oldErr = document.getElementById('setup-error');
+    if (oldErr) oldErr.style.display = 'none';
+
+    if (!url || !key) {
+      showSetupError('请填写 Project URL 和 Anon Key');
+      return;
+    }
+
+    if (url.indexOf('supabase.co') === -1) {
+      showSetupError('URL 格式不正确，应包含 supabase.co');
+      return;
+    }
+
+    if (typeof window.supabase === 'undefined') {
+      showSetupError('Supabase SDK 未加载，请刷新页面重试');
+      return;
+    }
+
+    btn.textContent = '连接中...';
+    btn.disabled = true;
+
+    localStorage.setItem('supabase_url', url);
+    localStorage.setItem('supabase_key', key);
+
     initSupabase(url, key);
 
-    // 测试连接
-    const { error } = await supabase.from('boxes').select('id').limit(1);
-    if (error) throw error;
+    supabase.from('boxes').select('id').limit(1).then(function(result) {
+      if (result.error) {
+        throw result.error;
+      }
+      document.getElementById('page-setup').classList.remove('active');
+      document.getElementById('app').style.display = 'flex';
+      showToast('连接成功！');
+      loadAllData();
+    }).catch(function(err) {
+      var msg = err.message || JSON.stringify(err) || '请检查配置';
+      showSetupError('连接失败：' + msg + '<br><br>请检查：<br>1. 是否已在 SQL Editor 中运行了 setup.sql<br>2. URL 和 Key 是否正确');
+    }).finally(function() {
+      btn.textContent = '开始使用';
+      btn.disabled = false;
+    });
 
-    document.getElementById('page-setup').classList.remove('active');
-    document.getElementById('app').style.display = 'flex';
-    showToast('连接成功！');
-    loadAllData();
-  } catch (err) {
-    const msg = err.message || '请检查配置';
-    errBox.innerHTML = '连接失败：' + msg +
-      '<br><br>请检查：<br>1. 是否已在 SQL Editor 中运行了 setup.sql<br>2. URL 和 Key 是否正确';
-    errBox.style.display = 'block';
-  } finally {
-    btn.textContent = '开始使用';
-    btn.disabled = false;
+  } catch (e) {
+    showSetupError('发生错误：' + e.message);
   }
 }
 
