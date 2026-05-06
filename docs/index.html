@@ -6,11 +6,19 @@
   <meta name="theme-color" content="#8B6F47">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>衣橱整理助手 v2</title>
+  <title>衣橱整理助手</title>
   <link rel="manifest" href="manifest.json">
+  <!-- 清除旧 Service Worker 缓存，解决加载旧版本页面的问题 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) { reg.unregister(); });
+      });
+      caches && caches.keys().then(function(keys) {
+        keys.forEach(function(k) { caches.delete(k); });
+      });
+    }
+  </script>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -1573,12 +1581,7 @@ function debounce(fn, delay) {
   };
 }
 
-// ---------- PWA Service Worker 注册 ----------
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
+// Service Worker 已移除，避免缓存旧版本页面
 
   </script>
   <script>
