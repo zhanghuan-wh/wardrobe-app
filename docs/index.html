@@ -133,7 +133,7 @@ USING (bucket_id = 'wardrobe-photos');</pre>
         </div>
       </div>
 
-      <button class="btn-primary btn-start" id="btn-start" onclick="startApp()">开始使用</button>
+      <button class="btn-primary btn-start" id="btn-start" onclick="try{startApp()}catch(e){alert('错误：'+e.message);console.error(e)}">开始使用</button>
     </div>
   </div>
 
@@ -1013,7 +1013,8 @@ async function saveBox() {
     return;
   }
 
-  const season = document.querySelector('.season-btn.active')?.dataset.season || '四季';
+  var seasonBtn = document.querySelector('.season-btn.active');
+  var season = (seasonBtn && seasonBtn.dataset.season) || '四季';
   const location = document.getElementById('box-location').value.trim();
   const notes = document.getElementById('box-notes').value.trim();
 
@@ -1279,7 +1280,7 @@ function detectDominantColor(imgElement) {
     b = Math.round(b / count);
 
     return rgbToColorName(r, g, b);
-  } catch {
+  } catch(e) {
     return '';
   }
 }
