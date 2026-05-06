@@ -448,8 +448,8 @@ USING (bucket_id = 'wardrobe-photos');</pre>
   <!-- 全局错误显示 -->
   <div id="global-error" style="display:none;position:fixed;top:0;left:0;right:0;background:#FEE2E2;color:#991B1B;padding:16px;z-index:999;font-size:14px;text-align:center;"></div>
 
-  <!-- Supabase JS SDK（本地文件，无需 CDN） -->
-  <script src="lib/supabase.min.js?v=3" onerror="document.getElementById('global-error').innerHTML='Supabase SDK 加载失败，请刷新页面';document.getElementById('global-error').style.display='block';"></script>
+  <!-- Supabase JS SDK（async 加载，避免阻塞页面脚本） -->
+  <script src="lib/supabase.min.js?v=4" async onerror="document.getElementById('global-error').innerHTML='Supabase SDK 加载失败，请刷新页面';document.getElementById('global-error').style.display='block';"></script>
   <!-- TensorFlow.js 和 MobileNet（可选，CDN 加载） -->
   <script src="https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js" async></script>
   <script src="https://unpkg.com/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js" async></script>
@@ -511,11 +511,19 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     const url = localStorage.getItem('supabase_url');
     const key = localStorage.getItem('supabase_key');
-    if (url && key && typeof window.supabase !== 'undefined') {
-      initSupabase(url, key);
-      document.getElementById('page-setup').classList.remove('active');
-      document.getElementById('app').style.display = 'flex';
-      loadAllData();
+    if (url && key) {
+      // 等待 SDK 加载完成后再初始化
+      var waitSDK = function(retries) {
+        if (typeof window.supabase !== 'undefined') {
+          initSupabase(url, key);
+          document.getElementById('page-setup').classList.remove('active');
+          document.getElementById('app').style.display = 'flex';
+          loadAllData();
+        } else if (retries > 0) {
+          setTimeout(function() { waitSDK(retries - 1); }, 500);
+        }
+      };
+      waitSDK(20);
     }
     const tagsInput = document.getElementById('add-tags-input');
     if (tagsInput) {
@@ -586,6 +594,17 @@ async function startApp() {
     errBox.style.display = 'block';
     errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
+  }
+  // 等待 SDK 加载（async 加载可能还没完成）
+  if (typeof window.supabase === 'undefined') {
+    btn.textContent = '加载中...';
+    btn.disabled = true;
+    for (var i = 0; i < 20; i++) {
+      await new Promise(function(r) { setTimeout(r, 500); });
+      if (typeof window.supabase !== 'undefined') break;
+    }
+    btn.textContent = '开始使用';
+    btn.disabled = false;
   }
   if (typeof window.supabase === 'undefined') {
     errBox.textContent = 'Supabase SDK 加载失败，请刷新页面重试';
